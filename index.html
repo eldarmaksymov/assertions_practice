@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audit Procedures Matcher</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .main-content {
+            display: flex;
+            gap: 20px;
+        }
+
+        .procedures-panel {
+            width: 33%;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .assertions-panel {
+            width: 67%;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .panel-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: #1f2937;
+        }
+
+        .procedure-item {
+            padding: 12px;
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            cursor: move;
+            transition: background-color 0.2s;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .procedure-item:hover {
+            background: #f3f4f6;
+        }
+
+        .procedure-item.dragging {
+            opacity: 0.5;
+        }
+
+        .assertions-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
+            gap: 16px;
+        }
+
+        .grid-header {
+            font-weight: 600;
+            padding: 8px;
+            background: #f9fafb;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .assertion-label {
+            font-weight: 500;
+            padding: 8px;
+            background: #f9fafb;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .drop-zone {
+            min-height: 96px;
+            padding: 8px;
+            border: 2px dashed #d1d5db;
+            border-radius: 6px;
+            background: #f9fafb;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .drop-zone:hover {
+            border-color: #9ca3af;
+            background: #f9fafb;
+        }
+
+        .drop-zone.drag-over {
+            border-color: #3b82f6;
+            background: #eff6ff;
+        }
+
+        .drop-zone.completed {
+            background: #dcfce7;
+            border-color: #16a34a;
+        }
+
+        .drop-zone.disabled {
+            background: #f9fafb;
+            border-color: #d1d5db;
+            cursor: not-allowed;
+        }
+
+        .completion-indicator {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            width: 20px;
+            height: 20px;
+            background: #16a34a;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .progress-bar {
+            margin-bottom: 20px;
+            background: #f3f4f6;
+            border-radius: 8px;
+            padding: 4px;
+        }
+
+        .progress-fill {
+            height: 20px;
+            background: linear-gradient(90deg, #3b82f6, #1d4ed8);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        @media (max-width: 1024px) {
+            .main-content {
+                flex-direction: column;
+            }
+            
+            .procedures-panel,
+            .assertions-panel {
+                width: 100%;
+            }
+            
+            .assertions-grid {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+            
+            .grid-header {
+                display: none;
+            }
+            
+            .assertion-row {
+                display: grid;
+                grid-template-columns: 1fr 1fr 1fr 1fr;
+                gap: 8px;
+                align-items: center;
+                margin-bottom: 16px;
+                padding: 12px;
+                background: #f9fafb;
+                border-radius: 6px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 style="text-align: center; margin-bottom: 30px; color: #1f2937; font-size: 24px;">Audit Procedures Matcher</h1>
+        
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressBar" style="width: 0%;">0 / 15 Complete</div>
+        </div>
+
+        <div class="main-content">
+            <div class="procedures-panel">
+                <h3 class="panel-title">Audit Procedures</h3>
+                <div id="proceduresList"></div>
+            </div>
+
+            <div class="assertions-panel">
+                <h3 class="panel-title">Assertions</h3>
+                <div class="assertions-grid" id="assertionsGrid"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initial procedures data
+        const initialProcedures = [
+            { id: 'ct1', text: 'Select a sample of recorded sales transactions and verify them against invoices and shipping documents', correct: 'ct-occurrence' },
+            { id: 'ct2', text: 'Trace a sample of shipping documents to sales invoices and the general ledger to ensure all sales are recorded', correct: 'ct-completeness' },
+            { id: 'ct3', text: 'Recalculate invoice amounts and match them to recorded sales to ensure correct pricing and quantities', correct: 'ct-accuracy' },
+            { id: 'ct4', text: 'Review sales transactions near year-end to confirm they are recorded in the correct period', correct: 'ct-cutoff' },
+            { id: 'ct5', text: 'Inspect recorded transactions to ensure they are properly classified as sales or other revenue sources', correct: 'ct-presentation' },
+            { id: 'ab1', text: 'Confirm a sample of inventory balances through physical inspection at the warehouse', correct: 'ab-existence' },
+            { id: 'ab2', text: 'Reconcile accounts payable balances to supplier statements to ensure all liabilities are recorded', correct: 'ab-completeness' },
+            { id: 'ab3', text: 'Verify the net realizable value of accounts receivable by reviewing subsequent cash collections', correct: 'ab-valuation' },
+            { id: 'ab4', text: 'Inspect loan agreements to confirm whether recorded liabilities are legally owed by the company', correct: 'ab-rights' },
+            { id: 'ab5', text: 'Examine receiving reports and supplier invoices near year-end to verify payables are recorded in the correct period', correct: 'ab-cutoff' },
+            { id: 'ab6', text: 'Review financial statements to ensure assets and liabilities are properly categorized according to accounting standards', correct: 'ab-presentation' },
+            { id: 'd1', text: 'Review supporting documentation for disclosed contingencies to verify their validity', correct: 'd-occurrence' },
+            { id: 'd2', text: 'Compare required disclosure checklists with financial statement notes to ensure all necessary disclosures are included', correct: 'd-completeness' },
+            { id: 'd3', text: 'Verify fair value disclosures by comparing them to external market data or valuation reports', correct: 'd-accuracy' },
+            { id: 'd4', text: 'Assess whether financial statement disclosures are clear and appropriately formatted according to accounting standards', correct: 'd-presentation' }
+        ];
+
+        // Application state
+        let procedures = [...initialProcedures];
+        let completedAssertions = new Set();
+
+        // Assertions structure
+        const assertionsStructure = [
+            { name: 'Assertion', isHeader: true },
+            { name: 'Classes of Transactions', isHeader: true },
+            { name: 'Account Balances', isHeader: true },
+            { name: 'Disclosures', isHeader: true },
+            
+            { name: 'Existence and occurrence', isLabel: true },
+            { id: 'ct-occurrence', category: 'ct' },
+            { id: 'ab-existence', category: 'ab' },
+            { id: 'd-occurrence', category: 'd' },
+            
+            { name: 'Completeness', isLabel: true },
+            { id: 'ct-completeness', category: 'ct' },
+            { id: 'ab-completeness', category: 'ab' },
+            { id: 'd-completeness', category: 'd' },
+            
+            { name: 'Valuation, accuracy, and allocation', isLabel: true },
+            { id: 'ct-accuracy', category: 'ct' },
+            { id: 'ab-valuation', category: 'ab' },
+            { id: 'd-accuracy', category: 'd' },
+            
+            { name: 'Rights and obligations', isLabel: true },
+            { disabled: true },
+            { id: 'ab-rights', category: 'ab' },
+            { disabled: true },
+            
+            { name: 'Cutoff', isLabel: true },
+            { id: 'ct-cutoff', category: 'ct' },
+            { id: 'ab-cutoff', category: 'ab' },
+            { disabled: true },
+            
+            { name: 'Presentation and disclosure', isLabel: true },
+            { id: 'ct-presentation', category: 'ct' },
+            { id: 'ab-presentation', category: 'ab' },
+            { id: 'd-presentation', category: 'd' }
+        ];
+
+        // Initialize the application
+        function init() {
+            renderProcedures();
+            renderAssertions();
+            updateProgress();
+        }
+
+        // Render procedures list
+        function renderProcedures() {
+            const container = document.getElementById('proceduresList');
+            container.innerHTML = '';
+            
+            procedures.forEach(procedure => {
+                const div = document.createElement('div');
+                div.className = 'procedure-item';
+                div.draggable = true;
+                div.textContent = procedure.text;
+                div.dataset.id = procedure.id;
+                
+                div.addEventListener('dragstart', handleDragStart);
+                div.addEventListener('dragend', handleDragEnd);
+                
+                container.appendChild(div);
+            });
+        }
+
+        // Render assertions grid
+        function renderAssertions() {
+            const container = document.getElementById('assertionsGrid');
+            container.innerHTML = '';
+            
+            assertionsStructure.forEach(item => {
+                const div = document.createElement('div');
+                
+                if (item.isHeader) {
+                    div.className = 'grid-header';
+                    div.textContent = item.name;
+                } else if (item.isLabel) {
+                    div.className = 'assertion-label';
+                    div.textContent = item.name;
+                } else if (item.disabled) {
+                    div.className = 'drop-zone disabled';
+                } else if (item.id) {
+                    div.className = `drop-zone ${completedAssertions.has(item.id) ? 'completed' : ''}`;
+                    div.dataset.targetId = item.id;
+                    
+                    div.addEventListener('dragover', handleDragOver);
+                    div.addEventListener('drop', handleDrop);
+                    div.addEventListener('dragenter', handleDragEnter);
+                    div.addEventListener('dragleave', handleDragLeave);
+                    
+                    if (completedAssertions.has(item.id)) {
+                        const indicator = document.createElement('div');
+                        indicator.className = 'completion-indicator';
+                        indicator.textContent = '✓';
+                        div.appendChild(indicator);
+                    }
+                }
+                
+                container.appendChild(div);
+            });
+        }
+
+        // Update progress bar
+        function updateProgress() {
+            const total = initialProcedures.length;
+            const completed = completedAssertions.size;
+            const percentage = (completed / total) * 100;
+            
+            const progressBar = document.getElementById('progressBar');
+            progressBar.style.width = `${percentage}%`;
+            progressBar.textContent = `${completed} / ${total} Complete`;
+        }
+
+        // Drag event handlers
+        function handleDragStart(e) {
+            e.dataTransfer.setData('text/plain', e.target.dataset.id);
+            e.target.classList.add('dragging');
+        }
+
+        function handleDragEnd(e) {
+            e.target.classList.remove('dragging');
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+        }
+
+        function handleDragEnter(e) {
+            e.preventDefault();
+            if (!e.target.classList.contains('disabled') && !e.target.classList.contains('completed')) {
+                e.target.classList.add('drag-over');
+            }
+        }
+
+        function handleDragLeave(e) {
+            if (!e.target.contains(e.relatedTarget)) {
+                e.target.classList.remove('drag-over');
+            }
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            e.target.classList.remove('drag-over');
+            
+            const procedureId = e.dataTransfer.getData('text/plain');
+            const targetId = e.target.dataset.targetId;
+            
+            if (!targetId || e.target.classList.contains('completed')) {
+                return;
+            }
+            
+            const procedure = procedures.find(p => p.id === procedureId);
+            
+            if (procedure && procedure.correct === targetId) {
+                // Correct match
+                procedures = procedures.filter(p => p.id !== procedureId);
+                completedAssertions.add(targetId);
+                
+                // Re-render everything
+                renderProcedures();
+                renderAssertions();
+                updateProgress();
+                
+                // Check if all procedures are completed
+                if (procedures.length === 0) {
+                    setTimeout(() => {
+                        alert('Congratulations! You have successfully matched all audit procedures to their correct assertions!');
+                    }, 100);
+                }
+            }
+        }
+
+        // Initialize the application when the page loads
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
